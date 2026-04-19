@@ -19,6 +19,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QMutex>
 #include <QtDBus/QtDBus>
 
 #include <functional>
@@ -90,4 +91,6 @@ private:
 
     QDBusObjectPath m_responseHandle;
     QDBusObjectPath m_sessionObjPath;
+
+    QRecursiveMutex m_mutex;
 };

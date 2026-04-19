@@ -44,7 +44,7 @@ void obs_module_post_load()
 
     obs_frontend_add_event_callback(
         [](obs_frontend_event event, void* /*unused*/) {
-            if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+            if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING && PORTAL != nullptr) {
                 PORTAL->createSession();
             }
         },
@@ -55,7 +55,9 @@ void obs_module_post_load()
         auto* action = (QAction*)obs_frontend_add_tools_menu_qaction("Configure Wayland Hotkeys");
 
         QObject::connect(action, &QAction::triggered, []() {
-            PORTAL->configureShortcuts();
+            if (PORTAL != nullptr) {
+                PORTAL->configureShortcuts();
+            }
         });
     }
 }
@@ -63,4 +65,5 @@ void obs_module_post_load()
 void obs_module_unload(void)
 {
     delete PORTAL;
+    PORTAL = nullptr;
 }

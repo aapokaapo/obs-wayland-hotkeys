@@ -156,6 +156,7 @@ void ShortcutsPortal::createOBSShortcut(obs_hotkey_id id, obs_hotkey_t* hotkey)
 
 void ShortcutsPortal::createShortcuts()
 {
+    QMutexLocker locker(&m_mutex);
     m_shortcuts.clear();
 
     obs_enum_hotkeys(
@@ -247,7 +248,7 @@ void ShortcutsPortal::createShortcuts()
 static void reloadHotkeys(void* data, calldata_t* /* unused */)
 {
     auto* portal = (ShortcutsPortal*)data;
-    portal->reloadShortcuts();
+    QMetaObject::invokeMethod(portal, [portal]() { portal->reloadShortcuts(); }, Qt::QueuedConnection);
 }
 
 void ShortcutsPortal::reloadShortcuts()
@@ -314,6 +315,7 @@ void ShortcutsPortal::onActivatedSignal(
     const QVariantMap& /*unused*/
 )
 {
+    QMutexLocker locker(&m_mutex);
     if (m_shortcuts.contains(shortcutName)) {
         m_shortcuts[shortcutName].callback(true);
     }
@@ -326,6 +328,7 @@ void ShortcutsPortal::onDeactivatedSignal(
     const QVariantMap& /*unused*/
 )
 {
+    QMutexLocker locker(&m_mutex);
     if (m_shortcuts.contains(shortcutName)) {
         m_shortcuts[shortcutName].callback(false);
     }
@@ -333,6 +336,12 @@ void ShortcutsPortal::onDeactivatedSignal(
 
 void ShortcutsPortal::bindShortcuts()
 {
+    if (m_sessionObjPath.path().isEmpty()) {
+        qWarning() << "Cannot bind shortcuts: session not established";
+        return;
+    }
+
+    QMutexLocker locker(&m_mutex);
     QDBusMessage bindShortcuts = QDBusMessage::createMethodCall(
         FREEDESKTOP_DEST,
         FREEDESKTOP_PATH,
@@ -389,6 +398,11 @@ QString ShortcutsPortal::getWindowId()
 
 void ShortcutsPortal::configureShortcuts()
 {
+    if (m_sessionObjPath.path().isEmpty()) {
+        qWarning() << "Cannot configure shortcuts: session not established";
+        return;
+    }
+
     QDBusMessage bindShortcuts = QDBusMessage::createMethodCall(
         FREEDESKTOP_DEST,
         FREEDESKTOP_PATH,
@@ -414,6 +428,8 @@ void ShortcutsPortal::configureShortcuts()
 
 ShortcutsPortal::~ShortcutsPortal()
 {
+    m_reloadTimer.stop();
+
     signal_handler_disconnect(obs_get_signal_handler(), "hotkey_register", reloadHotkeys, this);
 
     QDBusConnection::sessionBus().disconnect(
@@ -432,7 +448,7 @@ ShortcutsPortal::~ShortcutsPortal()
         GLOBAL_SHORTCUTS_INTERFACE,
         u"Deactivated"_s,
         this,
-        SLOT(onActivatedSignal(
+        SLOT(onDeactivatedSignal(
             QDBusObjectPath, QString, qulonglong, QVariantMap
         ))
     );
